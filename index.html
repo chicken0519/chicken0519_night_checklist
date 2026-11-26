@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>내일 할 일 체크리스트 | 밤 루틴 정리</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Pretendard / Inter / Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans KR"', 'Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        night: {
+                            950: '#090d16',
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* 커스텀 스크롤바 및 부드러운 애니메이션 */
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .task-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.25s ease;
+        }
+
+        .task-card.dragging {
+            opacity: 0.45;
+            transform: scale(0.98);
+        }
+
+        .task-card.drag-over {
+            border-top: 2px solid #818cf8;
+        }
+
+        /* 체크박스 커스텀 애니메이션 */
+        .custom-checkbox {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .strike-text {
+            position: relative;
+            transition: color 0.25s ease;
+        }
+
+        /* 토스트 알림 애니메이션 */
+        @keyframes slideUp {
+            from { transform: translate(-50%, 20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .toast-enter {
+            animation: slideUp 0.25s ease forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-night-950 dark:text-slate-100 min-h-screen antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <!-- 배경 은은한 야간 그라데이션 효과 -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div class="hidden dark:block absolute -top-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl"></div>
+        <div class="hidden dark:block absolute top-1/3 -right-32 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- 메인 컨테이너 -->
+    <div class="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        
+        <!-- 1. 상단 헤더 영역 -->
+        <header class="bg-white/80 dark:bg-night-900/80 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-medium text-indigo-600 dark:text-amber-400 mb-1.5">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-amber-400/10 border border-indigo-100 dark:border-amber-400/20">
+                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                            밤 루틴 플래너
+                        </span>
+                        <span id="today-date-label" class="text-slate-400 dark:text-slate-500">오늘 날짜 로딩중...</span>
+                    </div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
+                        <span id="tomorrow-date-label" class="text-indigo-600 dark:text-indigo-400">내일</span>
+                        <span>할 일 체크리스트</span>
+                    </h1>
+                </div>
+
+                <!-- 우측 상단 컨트롤: 클라우드 상태, 계정 연결, 테마 토글 -->
+                <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <!-- 클라우드 동기화 상태 배지 -->
+                    <div id="sync-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-slate-100 dark:bg-night-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80">
+                        <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span id="sync-status-text">연결 준비중...</span>
+                    </div>
+
+                    <!-- 수동 즉시 저장 버튼 -->
+                    <button id="btn-manual-save" type="button" title="클라우드에 즉시 저장"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-500/30 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <span>지금 클라우드 저장</span>
+                    </button>
+
+                    <!-- 라이트/다크 모드 토글 버튼 -->
+                    <button id="theme-toggle" type="button" aria-label="테마 전환"
+                        class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-night-800 dark:hover:bg-slate-700 text-slate-600 dark:text-amber-300 transition-colors border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <!-- 해 아이콘 (다크모드일 때 표시 -> 라이트 전환용) -->
+                        <svg id="sun-icon" class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <!-- 달 아이콘 (라이트모드일 때 표시 -> 다크 전환용) -->
+                        <svg id="moon-icon" class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 클라우드 계정 프로필 및 기기 간 동기화 안내 바 -->
+            <div class="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                    <div id="user-avatar" class="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold shrink-0 overflow-hidden">
+                        <span>☁️</span>
+                    </div>
+                    <div class="truncate">
+                        <span id="user-display-name" class="font-semibold text-slate-700 dark:text-slate-200">클라우드 연결 중...</span>
+                        <span id="user-uid-label" class="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500 font-mono"></span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="btn-google-login" type="button"
+                        class="hidden items-center gap-1.5 px-3 py-1 rounded-lg font-medium bg-white hover:bg-slate-50 dark:bg-night-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm transition">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"/></svg>
+                        <span>Google 계정으로 기기 연동</span>
+                    </button>
+                    <button id="btn-logout" type="button"
+                        class="hidden px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-500 hover:text-rose-600 dark:text-slate-400 dark:hover:text-rose-400 bg-slate-100 dark:bg-night-800 transition">
+                        로그아웃
+                    </button>
+                </div>
+            </div>
+
+            <!-- 진행률 프로그레스 바 & 카운터 -->
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80">
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- 3. 카테고리 필터 탭 & 밤 루틴 액션 바 -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <!-- 필터 버튼 그룹 -->
+            <nav id="category-tabs" class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar" aria-label="카테고리 필터">
+                <button type="button" data-filter="ALL" class="filter-btn active px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition">
+                    전체 보기
+                </button>
+                <button type="button" data-filter="핵심 목표 (Top 3)" class="filter-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition">
+                    ⭐ 핵심 목표
+                </button>
+                <button type="button" data-filter="업무 및 공부" class="filter-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition">
+                    💼 업무·공부
+                </button>
+                <button type="button" data-filter="개인 프로젝트 · 취미" class="filter-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition">
+                    🎨 프로젝트·취미
+                </button>
+                <button type="button" data-filter="생활 · 루틴" class="filter-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition">
+                    🌙 생활·루틴
+                </button>
+            </nav>
+        </div>
+
+        <!-- 4. 핵심 목표 (Top 3) 하이라이트 전용 섹션 ('전체 보기' 또는 '핵심 목표' 탭일 때 상단 노출) -->
+        <section id="top3-section" class="mb-6">
+            <div class="bg-gradient-to-br from-amber-50/90 to-indigo-50/70 dark:from-night-900 dark:to-indigo-950/40 border border-amber-200/80 dark:border-amber-500/25 rounded-2xl p-4 sm:p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-lg bg-amber-400/20 text-amber-600 dark:text-amber-400 text-sm">⭐</span>
+                        <h2 class="text-sm sm:text-base font-bold text-slate-900 dark:text-amber-100">내일의 핵심 목표 (Top 3)</h2>
+                    </div>
+                    <span id="top3-badge" class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                        0 / 3 설정됨
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">내일 다른 일을 다 못하더라도 이 3가지만은 꼭 완료해 보세요.</p>
+                
+                <!-- Top 3 리스트 컨테이너 -->
+                <div id="top3-list" class="space-y-2.5"></div>
+            </div>
+        </section>
+
+        <!-- 5. 일반 카테고리 할 일 목록 섹션 -->
+        <section id="general-section" class="mb-6">
+            <div class="flex items-center justify-between mb-2.5 px-1">
+                <h2 id="general-section-title" class="text-xs sm:text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    세부 일정 및 루틴
+                </h2>
+                <span class="text-[11px] text-slate-400 dark:text-slate-500">드래그 또는 화살표로 순서 변경</span>
+            </div>
+            
+            <div id="task-list" class="space-y-2.5"></div>
+
+            <!-- 빈 상태 안내 -->
+            <div id="empty-state" class="hidden text-center py-12 px-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-night-900/40">
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">등록된 할 일이 없습니다.</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">위 입력창에서 내일 실행할 일정을 추가해 보세요!</p>
+            </div>
+        </section>
+
+        <!-- 6. 밤 루틴 정리 유틸리티 버튼 & 회고 메모장 -->
+        <section class="bg-white dark:bg-night-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-5">
+            
+            <!-- 밤 루틴 한 줄 회고 / 내일 다짐 -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label for="night-reflection" class="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        <span class="text-indigo-500 dark:text-amber-400">✍️</span>
+                        <span>오늘의 밤 회고 & 내일 다짐</span>
+                    </label>
+                    <span id="memo-saved-indicator" class="text-[11px] text-emerald-600 dark:text-emerald-400 opacity-0 transition-opacity duration-300">자동 저장됨</span>
+                </div>
+                <textarea id="night-reflection" rows="2" placeholder="오늘 하루 수고한 나에게 한마디, 혹은 내일 아침을 여는 다짐을 짧게 남겨보세요..."
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-night-800/80 border border-slate-200 dark:border-slate-700/80 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition resize-none"></textarea>
+            </div>
+
+            <!-- 밤 루틴 일괄 정리 버튼 그룹 -->
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" id="btn-clear-completed"
+                        class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-600 dark:bg-night-800 dark:hover:bg-rose-950/50 dark:text-slate-300 dark:hover:text-rose-400 border border-slate-200/80 dark:border-slate-700 transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        <span>완료한 항목 정리</span>
+                    </button>
+
+                    <button type="button" id="btn-carry-over"
+                        class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:hover:bg-indigo-500/25 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-500/30 transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        <span>미완료 항목 내일로 이월</span>
+                    </button>
+                </div>
+
+                <button type="button" id="btn-reset-sample"
+                    class="px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition">
+                    기본 예시 복원
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <!-- 항목 수정 모달 (alert/prompt 대체용 커스텀 UI) -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-night-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-2xl">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-4">할 일 수정</h3>
+            <form id="edit-task-form" class="space-y-3.5">
+                <input type="hidden" id="edit-task-id">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">카테고리</label>
+                    <select id="edit-task-category" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-night-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="핵심 목표 (Top 3)">⭐ 핵심 목표 (Top 3)</option>
+                        <option value="업무 및 공부">💼 업무 및 공부</option>
+                        <option value="개인 프로젝트 · 취미">🎨 개인 프로젝트 · 취미</option>
+                        <option value="생활 · 루틴">🌙 생활 · 루틴</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">할 일 내용</label>
+                    <input type="text" id="edit-task-title" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-night-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">메모 (선택)</label>
+                    <input type="text" id="edit-task-memo" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-night-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" id="btn-cancel-edit" class="px-4 py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-night-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition">취소</button>
+                    <button type="submit" class="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition">저장하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 커스텀 확인 다이얼로그 모달 (confirm 대체) -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-night-900 border border-slate-200 dark:border-slate-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+            <h3 id="confirm-title" class="text-base font-bold text-slate-900 dark:text-white mb-2">확인</h3>
+            <p id="confirm-message" class="text-sm text-slate-600 dark:text-slate-300 mb-5 leading-relaxed"></p>
+            <div class="flex justify-end gap-2">
+                <button type="button" id="confirm-cancel" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-night-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition">취소</button>
+                <button type="button" id="confirm-ok" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white transition">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토스트 알림 컨테이너 -->
+    <div id="toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            GoogleAuthProvider,
+            signInWithPopup,
+            linkWithPopup,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            doc,
+            getDoc,
+            setDoc,
+            onSnapshot
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        /**
+         * 밤 루틴 체크리스트 애플리케이션 로직 (클라우드 실시간 동기화 버전)
+         */
+        const LEGACY_STORAGE_KEYS = {
+            TASKS: 'night_routine_tasks_v1',
+            REFLECTION: 'night_routine_reflection_v1',
+            THEME: 'night_routine_theme_v1'
+        };
+
+        // Firebase 환경 설정 초기화
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        let app = null;
+        let auth = null;
+        let db = null;
+        let currentUser = null;
+        let unsubscribeSnapshot = null;
+        let isApplyingRemoteUpdate = false;
+        let saveDebounceTimer = null;
+
+        // 초기 실행 시 기본 예시 데이터
+        const DEFAULT_TASKS = [
+            {
+                id: 'task-1',
+                title: '내일 가장 중요한 핵심 목표 1순위 완수하기',
+                memo: '오전 집중력이 가장 높을 때 스마트폰 방해금지 모드 켜고 시작',
+                category: '핵심 목표 (Top 3)',
+                checked: false
+            },
+            {
+                id: 'task-2',
+                title: '내일 꼭 끝내야 할 필수 일정 2순위 마무리',
+                memo: '점심 식사 전까지 1차 초안 완료 목표',
+                category: '핵심 목표 (Top 3)',
+                checked: false
+            },
+            {
+                id: 'task-3',
+                title: '주요 메일 및 협업 메시지 피드백 회신',
+                memo: '누락된 요청 사항 없는지 체크리스트 확인',
+                category: '업무 및 공부',
+                checked: false
+            },
+            {
+                id: 'task-4',
+                title: '퇴근 후 개인 프로젝트 또는 관심 분야 학습 40분',
+                memo: '부담 없는 작은 단위로 꾸준히 이어가기',
+                category: '개인 프로젝트 · 취미',
+                checked: false
+            },
+            {
+                id: 'task-5',
+                title: '내일 아침 외출 준비물(지갑, 차키, 충전기) 미리 챙겨두기',
+                memo: '현관 앞 트레이에 정리해 두기',
+                category: '생활 · 루틴',
+                checked: true
+            },
+            {
+                id: 'task-6',
+                title: '가벼운 스트레칭 15분 및 물 한 잔 마시기',
+                memo: '숙면을 위해 취침 1시간 전 블루라이트 줄이기',
+                category: '생활 · 루틴',
+                checked: false
+            }
+        ];
+
+        // 애플리케이션 상태
+        let tasks = [...DEFAULT_TASKS];
+        let currentFilter = 'ALL';
+        let draggedTaskId = null;
+
+        // DOM 요소 참조
+        const top3Section = document.getElementById('top3-section');
+        const top3ListEl = document.getElementById('top3-list');
+        const top3BadgeEl = document.getElementById('top3-badge');
+        const generalSection = document.getElementById('general-section');
+        const generalSectionTitle = document.getElementById('general-section-title');
+        const taskListEl = document.getElementById('task-list');
+        const emptyStateEl = document.getElementById('empty-state');
+        const progressBarEl = document.getElementById('progress-bar');
+        const progressCountEl = document.getElementById('progress-count');
+        const progressPercentEl = document.getElementById('progress-percent');
+        const reflectionInput = document.getElementById('night-reflection');
+        const memoSavedIndicator = document.getElementById('memo-saved-indicator');
+
+        // 동기화 및 계정 UI 요소
+        const syncStatusDot = document.getElementById('sync-status-dot');
+        const syncStatusText = document.getElementById('sync-status-text');
+        const userAvatarEl = document.getElementById('user-avatar');
+        const userDisplayNameEl = document.getElementById('user-display-name');
+        const userUidLabelEl = document.getElementById('user-uid-label');
+        const btnGoogleLogin = document.getElementById('btn-google-login');
+        const btnLogout = document.getElementById('btn-logout');
+
+        /**
+         * 동기화 상태 배지 업데이트
+         */
+        function setSyncStatus(state, customText) {
+            if (state === 'syncing') {
+                syncStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+                syncStatusText.textContent = customText || '클라우드 저장 중...';
+            } else if (state === 'synced') {
+                syncStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+                syncStatusText.textContent = customText || '클라우드 동기화 완료';
+            } else if (state === 'error') {
+                syncStatusDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+                syncStatusText.textContent = customText || '동기화 연결 오류';
+            } else {
+                syncStatusDot.className = 'w-2 h-2 rounded-full bg-slate-400';
+                syncStatusText.textContent = customText || '연결 중...';
+            }
+        }
+
+        /**
+         * 사용자 프로필 헤더 UI 업데이트
+         */
+        function updateUserHeaderUI(user) {
+            if (!user) {
+                userAvatarEl.innerHTML = '<span>☁️</span>';
+                userDisplayNameEl.textContent = '클라우드 연결 대기중';
+                userUidLabelEl.textContent = '';
+                btnGoogleLogin.classList.add('hidden');
+                btnGoogleLogin.classList.remove('inline-flex');
+                btnLogout.classList.add('hidden');
+                return;
+            }
+
+            userUidLabelEl.textContent = `ID: ${user.uid}`;
+
+            if (user.isAnonymous) {
+                userAvatarEl.innerHTML = '<span>🌙</span>';
+                userDisplayNameEl.textContent = '게스트 클라우드 모드';
+                btnGoogleLogin.classList.remove('hidden');
+                btnGoogleLogin.classList.add('inline-flex');
+                btnLogout.classList.add('hidden');
+            } else {
+                if (user.photoURL) {
+                    userAvatarEl.innerHTML = `<img src="${user.photoURL}" alt="프로필" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span>✨</span>'">`;
+                } else {
+                    userAvatarEl.innerHTML = '<span>✨</span>';
+                }
+                userDisplayNameEl.textContent = user.displayName || user.email || 'Google 연동 계정';
+                btnGoogleLogin.classList.add('hidden');
+                btnGoogleLogin.classList.remove('inline-flex');
+                btnLogout.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * 1. 날짜 계산 및 헤더 렌더링 (오늘 날짜 + 자동 계산된 내일 날짜)
+         */
+        function initDates() {
+            const days = ['일', '월', '화', '수', '목', '금', '토'];
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(now.getDate() + 1);
+
+            const todayStr = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${days[now.getDay()]}) 밤`;
+            const tomorrowStr = `${tomorrow.getMonth() + 1}월 ${tomorrow.getDate()}일 (${days[tomorrow.getDay()]})`;
+
+            document.getElementById('today-date-label').textContent = todayStr;
+            document.getElementById('tomorrow-date-label').textContent = tomorrowStr;
+        }
+
+        /**
+         * 2. 테마(다크/라이트 모드) 초기화 및 전환 (클라우드 동기화 포함)
+         */
+        function applyTheme(themeValue) {
+            const htmlEl = document.documentElement;
+            if (themeValue === 'light') {
+                htmlEl.classList.remove('dark');
+            } else {
+                htmlEl.classList.add('dark');
+            }
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem(LEGACY_STORAGE_KEYS.THEME);
+            applyTheme(savedTheme === 'light' ? 'light' : 'dark');
+
+            document.getElementById('theme-toggle').addEventListener('click', () => {
+                const htmlEl = document.documentElement;
+                htmlEl.classList.toggle('dark');
+                const isDark = htmlEl.classList.contains('dark');
+                const newTheme = isDark ? 'dark' : 'light';
+                localStorage.setItem(LEGACY_STORAGE_KEYS.THEME, newTheme);
+                saveAllToCloud(true);
+            });
+        }
+
+        /**
+         * 3. Firestore 클라우드 데이터 경로 및 저장/실시간 수신
+         */
+        function getUserDataDocRef(uid) {
+            return doc(db, 'artifacts', appId, 'users', uid, 'nightRoutine', 'data');
+        }
+
+        /**
+         * 기존 브라우저 로컬 기록 확인 (첫 로그인 마이그레이션용)
+         */
+        function getLegacyLocalData() {
+            try {
+                const rawTasks = localStorage.getItem(LEGACY_STORAGE_KEYS.TASKS);
+                const savedReflection = localStorage.getItem(LEGACY_STORAGE_KEYS.REFLECTION);
+                const savedTheme = localStorage.getItem(LEGACY_STORAGE_KEYS.THEME);
+
+                if (rawTasks || savedReflection) {
+                    return {
+                        tasks: rawTasks ? JSON.parse(rawTasks) : [...DEFAULT_TASKS],
+                        reflection: savedReflection || '',
+                        theme: savedTheme || 'dark'
+                    };
+                }
+            } catch (e) {
+                console.error('기존 기록 확인 오류:', e);
+            }
+            return null;
+        }
+
+        /**
+         * 클라우드에 전체 상태 저장 (디바운스 또는 즉시 실행)
+         */
+        async function saveAllToCloud(immediate = false, showSuccessToast = false) {
+            if (!db || !currentUser) return;
+
+            const performWrite = async () => {
+                if (!currentUser) return;
+                setSyncStatus('syncing');
+                try {
+                    const isDark = document.documentElement.classList.contains('dark');
+                    const docRef = getUserDataDocRef(currentUser.uid);
+                    await setDoc(docRef, {
+                        tasks: tasks,
+                        reflection: reflectionInput.value || '',
+                        theme: isDark ? 'dark' : 'light',
+                        updatedAt: Date.now()
+                    }, { merge: true });
+
+                    setSyncStatus('synced');
+                    if (showSuccessToast) {
+                        showToast('클라우드에 안전하게 저장되었습니다.');
+                    }
+                } catch (error) {
+                    console.error('클라우드 저장 오류:', error);
+                    setSyncStatus('error', '저장 실패 (재시도 필요)');
+                    if (showSuccessToast) {
+                        showToast('저장 중 오류가 발생했습니다. 네트워크를 확인해 주세요.');
+                    }
+                }
+            };
+
+            clearTimeout(saveDebounceTimer);
+            if (immediate) {
+                await performWrite();
+            } else {
+                setSyncStatus('syncing');
+                saveDebounceTimer = setTimeout(performWrite, 350);
+            }
+        }
+
+        function saveTasks() {
+            saveAllToCloud(false, false);
+        }
+
+        /**
+         * 사용자 인증 후 Firestore 실시간 동기화 구독 시작
+         */
+        async function startCloudSyncForUser(user) {
+            if (unsubscribeSnapshot) {
+                unsubscribeSnapshot();
+                unsubscribeSnapshot = null;
+            }
+
+            if (!db || !user) return;
+
+            setSyncStatus('syncing', '클라우드 불러오는 중...');
+            const docRef = getUserDataDocRef(user.uid);
+
+            try {
+                // 초기 문서 확인: 클라우드에 데이터가 없으면 기존 로컬 데이터 마이그레이션 또는 기본 템플릿 생성
+                const initialSnap = await getDoc(docRef);
+                if (!initialSnap.exists()) {
+                    const legacyData = getLegacyLocalData();
+                    if (legacyData) {
+                        tasks = legacyData.tasks;
+                        reflectionInput.value = legacyData.reflection;
+                        applyTheme(legacyData.theme);
+                        await setDoc(docRef, {
+                            tasks: tasks,
+                            reflection: reflectionInput.value,
+                            theme: legacyData.theme,
+                            updatedAt: Date.now()
+                        });
+                        // 마이그레이션 완료 후 로컬 중복 데이터 정리
+                        localStorage.removeItem(LEGACY_STORAGE_KEYS.TASKS);
+                        localStorage.removeItem(LEGACY_STORAGE_KEYS.REFLECTION);
+                        showToast('기존 기기의 기록을 클라우드로 안전하게 옮겼습니다!');
+                    } else {
+                        tasks = [...DEFAULT_TASKS];
+                        reflectionInput.value = '';
+                        await setDoc(docRef, {
+                            tasks: tasks,
+                            reflection: '',
+                            theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+                            updatedAt: Date.now()
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('초기 클라우드 확인 오류:', err);
+            }
+
+            // 실시간 onSnapshot 구독
+            unsubscribeSnapshot = onSnapshot(docRef, (snapshot) => {
+                if (!snapshot.exists()) return;
+                const data = snapshot.data();
+
+                isApplyingRemoteUpdate = true;
+                if (Array.isArray(data.tasks)) {
+                    tasks = data.tasks;
+                }
+                if (typeof data.reflection === 'string' && document.activeElement !== reflectionInput) {
+                    reflectionInput.value = data.reflection;
+                }
+                if (data.theme) {
+                    applyTheme(data.theme);
+                }
+                render();
+                isApplyingRemoteUpdate = false;
+                setSyncStatus('synced');
+            }, (error) => {
+                console.error('실시간 동기화 오류:', error);
+                setSyncStatus('error', '실시간 동기화 중단됨');
+            });
+        }
+
+        /**
+         * Firebase 인증 초기화
+         */
+        async function initFirebaseCloud() {
+            if (!firebaseConfig) {
+                setSyncStatus('error', '클라우드 설정 없음');
+                render();
+                return;
+            }
+
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    currentUser = user;
+                    updateUserHeaderUI(user);
+                    if (user) {
+                        await startCloudSyncForUser(user);
+                    }
+                });
+
+                // 커스텀 토큰 우선 인증, 없으면 익명 게스트 인증
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error('Firebase 초기화 실패:', error);
+                setSyncStatus('error', '클라우드 연결 실패');
+                render();
+            }
+        }
+
+        /**
+         * Google 계정 연동 (게스트 데이터 계승 또는 계정 전환)
+         */
+        async function handleGoogleSignIn() {
+            if (!auth) return;
+            const provider = new GoogleAuthProvider();
+            try {
+                setSyncStatus('syncing', 'Google 계정 연결 중...');
+                if (auth.currentUser && auth.currentUser.isAnonymous) {
+                    try {
+                        // 현재 게스트 데이터를 유지한 채 Google 계정으로 업그레이드 연결
+                        await linkWithPopup(auth.currentUser, provider);
+                        showToast('Google 계정과 연동되었습니다! 이제 다른 기기에서도 동기화됩니다.');
+                        return;
+                    } catch (linkErr) {
+                        // 이미 다른 기기에서 사용 중인 Google 계정인 경우 해당 계정으로 로그인 전환
+                        if (linkErr.code === 'auth/credential-already-in-use' || linkErr.code === 'auth/email-already-in-use') {
+                            await signInWithPopup(auth, provider);
+                            showToast('기존 Google 계정의 클라우드 데이터를 불러왔습니다!');
+                            return;
+                        }
+                        throw linkErr;
+                    }
+                } else {
+                    await signInWithPopup(auth, provider);
+                    showToast('Google 계정으로 로그인되었습니다.');
+                }
+            } catch (error) {
+                console.error('Google 로그인 오류:', error);
+                setSyncStatus('synced');
+                if (error.code !== 'auth/popup-closed-by-user') {
+                    showToast('Google 계정 연결을 완료하지 못했습니다.');
+                }
+            }
+        }
+
+        /**
+         * 로그아웃 후 새 게스트 세션으로 전환
+         */
+        async function handleLogout() {
+            if (!auth) return;
+            showConfirm(
+                '계정 로그아웃',
+                'Google 계정 연결을 해제하고 게스트 모드로 전환할까요? (클라우드에 저장된 기록은 계정에 안전하게 남아있습니다.)',
+                async () => {
+                    try {
+                        await signOut(auth);
+                        await signInAnonymously(auth);
+                        showToast('로그아웃되었습니다.');
+                    } catch (error) {
+                        console.error('로그아웃 오류:', error);
+                    }
+                }
+            );
+        }
+
+        /**
+         * 4. 토스트 알림 및 커스텀 확인창
+         */
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            container.innerHTML = `
+                <div class="toast-enter px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-xs sm:text-sm font-medium shadow-lg flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-amber-400 dark:bg-indigo-600"></span>
+                    <span>${message}</span>
+                </div>
+            `;
+            clearTimeout(window.toastTimer);
+            window.toastTimer = setTimeout(() => {
+                container.innerHTML = '';
+            }, 2600);
+        }
+
+        function showConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('confirm-modal');
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            };
+
+            document.getElementById('confirm-cancel').onclick = cleanup;
+            document.getElementById('confirm-ok').onclick = () => {
+                cleanup();
+                onConfirm();
+            };
+        }
+
+        /**
+         * 5. 진행률 프로그레스 바 업데이트
+         */
+        function updateProgress() {
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.checked).length;
+            const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+            progressCountEl.textContent = `${completed} / ${total} 완료`;
+            progressPercentEl.textContent = `${percent}%`;
+            progressBarEl.style.width = `${percent}%`;
+        }
+
+        /**
+         * 6. 카테고리 뱃지 스타일 반환
+         */
+        function getCategoryBadge(category) {
+            const map = {
+                '핵심 목표 (Top 3)': 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
+                '업무 및 공부': 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20',
+                '개인 프로젝트 · 취미': 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+                '생활 · 루틴': 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20'
+            };
+            const style = map[category] || 'bg-slate-500/10 text-slate-600 dark:text-slate-300';
+            return `<span class="inline-block px-2 py-0.5 rounded-md text-[11px] font-medium border ${style}">${category}</span>`;
+        }
+
+        /**
+         * 7. 개별 할 일 카드 HTML 생성
+         */
+        function createTaskCardElement(task, isTop3Card = false) {
+            const card = document.createElement('div');
+            card.className = `task-card group relative flex items-start gap-3 p-3.5 sm:p-4 rounded-xl border transition-all ${
+                task.checked
+                    ? 'bg-slate-50/70 dark:bg-night-900/50 border-slate-200/60 dark:border-slate-800/60 opacity-75'
+                    : isTop3Card
+                        ? 'bg-white/95 dark:bg-night-900/95 border-amber-200/80 dark:border-amber-500/30 shadow-sm hover:border-amber-400/60'
+                        : 'bg-white dark:bg-night-900 border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700 shadow-sm'
+            }`;
+            card.setAttribute('draggable', 'true');
+            card.dataset.id = task.id;
+
+            // 드래그 앤 드롭 이벤트 연결
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragover', handleDragOver);
+            card.addEventListener('dragleave', handleDragLeave);
+            card.addEventListener('drop', handleDrop);
+            card.addEventListener('dragend', handleDragEnd);
+
+            const checkBtnClass = task.checked
+                ? 'bg-indigo-600 dark:bg-amber-500 border-indigo-600 dark:border-amber-500 text-white dark:text-night-950 scale-100'
+                : 'bg-transparent border-slate-300 dark:border-slate-600 hover:border-indigo-500 dark:hover:border-amber-400';
+
+            card.innerHTML = `
+                <!-- 체크박스 버튼 -->
+                <button type="button" aria-label="완료 체크"
+                    class="toggle-check-btn custom-checkbox mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${checkBtnClass}">
+                    ${task.checked ? '<svg class="w-3.5 h-3.5 stroke-[3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                </button>
+
+                <!-- 텍스트 및 메모 본문 -->
+                <div class="flex-1 min-w-0 cursor-pointer toggle-area">
+                    <div class="flex flex-wrap items-center gap-2 mb-1">
+                        ${!isTop3Card ? getCategoryBadge(task.category) : ''}
+                    </div>
+                    <p class="strike-text text-sm sm:text-[15px] font-medium leading-snug break-words ${
+                        task.checked
+                            ? 'line-through text-slate-400 dark:text-slate-500'
+                            : 'text-slate-800 dark:text-slate-100'
+                    }">${escapeHtml(task.title)}</p>
+                    ${task.memo ? `<p class="mt-1 text-xs text-slate-500 dark:text-slate-400 break-words ${task.checked ? 'line-through opacity-70' : ''}">${escapeHtml(task.memo)}</p>` : ''}
+                </div>
+
+                <!-- 우측 액션 컨트롤 (위/아래 이동, 수정, 삭제) -->
+                <div class="flex items-center gap-0.5 sm:gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                    <button type="button" title="위로 이동" class="move-up-btn p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-night-800 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                    </button>
+                    <button type="button" title="아래로 이동" class="move-down-btn p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-night-800 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <button type="button" title="수정" class="edit-btn p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-950/60 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                    <button type="button" title="삭제" class="delete-btn p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-950/60 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            `;
+
+            // 이벤트 바인딩
+            card.querySelector('.toggle-check-btn').addEventListener('click', () => toggleTask(task.id));
+            card.querySelector('.toggle-area').addEventListener('click', () => toggleTask(task.id));
+            card.querySelector('.move-up-btn').addEventListener('click', () => moveTask(task.id, -1));
+            card.querySelector('.move-down-btn').addEventListener('click', () => moveTask(task.id, 1));
+            card.querySelector('.edit-btn').addEventListener('click', () => openEditModal(task));
+            card.querySelector('.delete-btn').addEventListener('click', () => deleteTask(task.id));
+
+            return card;
+        }
+
+        /**
+         * 8. 전체 화면 렌더링
+         */
+        function render() {
+            updateProgress();
+            updateFilterButtonsUI();
+
+            const top3Tasks = tasks.filter(t => t.category === '핵심 목표 (Top 3)');
+            top3BadgeEl.textContent = `${top3Tasks.length} / 3 설정됨`;
+
+            // Top 3 섹션 노출 여부 결정 ('ALL' 또는 '핵심 목표 (Top 3)' 선택 시 표시)
+            if (currentFilter === 'ALL' || currentFilter === '핵심 목표 (Top 3)') {
+                top3Section.classList.remove('hidden');
+                top3ListEl.innerHTML = '';
+
+                if (top3Tasks.length === 0) {
+                    top3ListEl.innerHTML = `
+                        <div class="text-center py-4 px-3 rounded-xl border border-dashed border-amber-300/60 dark:border-amber-500/20 text-xs text-slate-500 dark:text-slate-400">
+                            아직 설정된 핵심 목표가 없습니다. 상단에서 <strong>⭐ 핵심 목표 (Top 3)</strong>를 선택해 추가해 보세요!
+                        </div>
+                    `;
+                } else {
+                    top3Tasks.forEach(task => {
+                        top3ListEl.appendChild(createTaskCardElement(task, true));
+                    });
+                }
+            } else {
+                top3Section.classList.add('hidden');
+            }
+
+            // 일반 목록 섹션 렌더링
+            if (currentFilter === '핵심 목표 (Top 3)') {
+                generalSection.classList.add('hidden');
+            } else {
+                generalSection.classList.remove('hidden');
+                generalSectionTitle.textContent = currentFilter === 'ALL' ? '세부 일정 및 루틴' : currentFilter;
+
+                const filteredTasks = currentFilter === 'ALL'
+                    ? tasks.filter(t => t.category !== '핵심 목표 (Top 3)')
+                    : tasks.filter(t => t.category === currentFilter);
+
+                taskListEl.innerHTML = '';
+
+                if (filteredTasks.length === 0) {
+                    emptyStateEl.classList.remove('hidden');
+                } else {
+                    emptyStateEl.classList.add('hidden');
+                    filteredTasks.forEach(task => {
+                        taskListEl.appendChild(createTaskCardElement(task, false));
+                    });
+                }
+            }
+        }
+
+        function updateFilterButtonsUI() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const isActive = btn.dataset.filter === currentFilter;
+                if (isActive) {
+                    btn.className = 'filter-btn active px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition bg-indigo-600 text-white shadow-sm';
+                } else {
+                    btn.className = 'filter-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium whitespace-nowrap transition bg-white dark:bg-night-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-night-800 border border-slate-200/80 dark:border-slate-800';
+                }
+            });
+        }
+
+        /**
+         * 9. CRUD 및 순서 이동 기능
+         */
+        function addTask(title, memo, category) {
+            // Top 3 최대 3개 제한 안내
+            if (category === '핵심 목표 (Top 3)') {
+                const top3Count = tasks.filter(t => t.category === '핵심 목표 (Top 3)').length;
+                if (top3Count >= 3) {
+                    showToast('핵심 목표 (Top 3)는 최대 3개까지만 등록할 수 있습니다.');
+                    return false;
+                }
+            }
+
+            const newTask = {
+                id: 'task-' + Date.now(),
+                title: title.trim(),
+                memo: memo.trim(),
+                category,
+                checked: false
+            };
+
+            tasks.unshift(newTask);
+            saveTasks();
+            render();
+            showToast('내일 할 일이 추가되었습니다.');
+            return true;
+        }
+
+        function toggleTask(id) {
+            const target = tasks.find(t => t.id === id);
+            if (!target) return;
+            target.checked = !target.checked;
+            saveTasks();
+            render();
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasks();
+            render();
+            showToast('항목이 삭제되었습니다.');
+        }
+
+        function moveTask(id, direction) {
+            const currentIndex = tasks.findIndex(t => t.id === id);
+            if (currentIndex === -1) return;
+
+            const currentTask = tasks[currentIndex];
+            // 같은 표시 그룹 내에서 인접한 항목 찾기
+            const sameGroupIndices = tasks
+                .map((t, idx) => ({ t, idx }))
+                .filter(({ t }) => {
+                    if (currentTask.category === '핵심 목표 (Top 3)') {
+                        return t.category === '핵심 목표 (Top 3)';
+                    }
+                    if (currentFilter === 'ALL') {
+                        return t.category !== '핵심 목표 (Top 3)';
+                    }
+                    return t.category === currentFilter;
+                })
+                .map(({ idx }) => idx);
+
+            const posInGroup = sameGroupIndices.indexOf(currentIndex);
+            const targetPosInGroup = posInGroup + direction;
+
+            if (targetPosInGroup < 0 || targetPosInGroup >= sameGroupIndices.length) return;
+
+            const targetIndex = sameGroupIndices[targetPosInGroup];
+            // 배열 요소 위치 교환
+            [tasks[currentIndex], tasks[targetIndex]] = [tasks[targetIndex], tasks[currentIndex]];
+            
+            saveTasks();
+            render();
+        }
+
+        /**
+         * 10. 드래그 앤 드롭 정렬 핸들러
+         */
+        function handleDragStart(e) {
+            draggedTaskId = this.dataset.id;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (this.dataset.id !== draggedTaskId) {
+                this.classList.add('drag-over');
+            }
+        }
+
+        function handleDragLeave() {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            const targetId = this.dataset.id;
+            if (!draggedTaskId || draggedTaskId === targetId) return;
+
+            const fromIndex = tasks.findIndex(t => t.id === draggedTaskId);
+            const toIndex = tasks.findIndex(t => t.id === targetId);
+            if (fromIndex === -1 || toIndex === -1) return;
+
+            // 서로 다른 섹션(Top 3 <-> 일반) 간 드롭 시 카테고리도 자동 동기화 (Top 3 개수 제한 체크)
+            const draggedTask = tasks[fromIndex];
+            const targetTask = tasks[toIndex];
+
+            if (draggedTask.category !== '핵심 목표 (Top 3)' && targetTask.category === '핵심 목표 (Top 3)') {
+                const top3Count = tasks.filter(t => t.category === '핵심 목표 (Top 3)').length;
+                if (top3Count >= 3) {
+                    showToast('핵심 목표 (Top 3)는 최대 3개까지만 배치할 수 있습니다.');
+                    return;
+                }
+                draggedTask.category = '핵심 목표 (Top 3)';
+            } else if (draggedTask.category === '핵심 목표 (Top 3)' && targetTask.category !== '핵심 목표 (Top 3)') {
+                draggedTask.category = targetTask.category;
+            }
+
+            const [movedItem] = tasks.splice(fromIndex, 1);
+            tasks.splice(toIndex, 0, movedItem);
+
+            saveTasks();
+            render();
+        }
+
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.task-card').forEach(el => el.classList.remove('drag-over'));
+            draggedTaskId = null;
+        }
+
+        /**
+         * 11. 수정 모달 제어
+         */
+        function openEditModal(task) {
+            document.getElementById('edit-task-id').value = task.id;
+            document.getElementById('edit-task-category').value = task.category;
+            document.getElementById('edit-task-title').value = task.title;
+            document.getElementById('edit-task-memo').value = task.memo || '';
+
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        /**
+         * XSS 방지 유틸리티
+         */
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        /**
+         * 12. 이벤트 리스너 초기화
+         */
+        function initEventListeners() {
+            // 수동 클라우드 즉시 저장 버튼
+            document.getElementById('btn-manual-save').addEventListener('click', () => {
+                saveAllToCloud(true, true);
+            });
+
+            // Google 계정 연동 및 로그아웃 버튼
+            btnGoogleLogin.addEventListener('click', handleGoogleSignIn);
+            btnLogout.addEventListener('click', handleLogout);
+
+            // 새 할 일 등록
+            document.getElementById('add-task-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const titleInput = document.getElementById('task-title');
+                const memoInput = document.getElementById('task-memo');
+                const categorySelect = document.getElementById('task-category');
+
+                if (!titleInput.value.trim()) return;
+
+                const success = addTask(titleInput.value, memoInput.value, categorySelect.value);
+                if (success) {
+                    titleInput.value = '';
+                    memoInput.value = '';
+                    titleInput.focus();
+                }
+            });
+
+            // 카테고리 필터 탭 클릭
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentFilter = btn.dataset.filter;
+                    render();
+                });
+            });
+
+            // 수정 모달 저장 및 취소
+            document.getElementById('btn-cancel-edit').addEventListener('click', closeEditModal);
+            document.getElementById('edit-task-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = document.getElementById('edit-task-id').value;
+                const newCategory = document.getElementById('edit-task-category').value;
+                const newTitle = document.getElementById('edit-task-title').value.trim();
+                const newMemo = document.getElementById('edit-task-memo').value.trim();
+
+                if (!newTitle) return;
+
+                const target = tasks.find(t => t.id === id);
+                if (!target) return;
+
+                // 다른 카테고리에서 Top 3로 변경 시 개수 제한 체크
+                if (target.category !== '핵심 목표 (Top 3)' && newCategory === '핵심 목표 (Top 3)') {
+                    const top3Count = tasks.filter(t => t.category === '핵심 목표 (Top 3)').length;
+                    if (top3Count >= 3) {
+                        showToast('핵심 목표 (Top 3)는 최대 3개까지만 설정할 수 있습니다.');
+                        return;
+                    }
+                }
+
+                target.category = newCategory;
+                target.title = newTitle;
+                target.memo = newMemo;
+
+                saveTasks();
+                render();
+                closeEditModal();
+                showToast('일정이 수정되었습니다.');
+            });
+            // 밤 회고 메모장 자동 저장 (클라우드 동기화)
+            let memoTimer;
+            reflectionInput.addEventListener('input', () => {
+                saveAllToCloud(false, false);
+                memoSavedIndicator.textContent = '클라우드 자동 저장됨';
+                memoSavedIndicator.style.opacity = '1';
+                clearTimeout(memoTimer);
+                memoTimer = setTimeout(() => {
+                    memoSavedIndicator.style.opacity = '0';
+                }, 1500);
+            });
+
+            // '완료한 항목 정리' 버튼
+            document.getElementById('btn-clear-completed').addEventListener('click', () => {
+                const completedCount = tasks.filter(t => t.checked).length;
+                if (completedCount === 0) {
+                    showToast('정리할 완료 항목이 없습니다.');
+                    return;
+                }
+                showConfirm(
+                    '완료한 항목 정리',
+                    `체크 완료된 ${completedCount}개의 항목을 목록에서 삭제할까요?`,
+                    () => {
+                        tasks = tasks.filter(t => !t.checked);
+                        saveTasks();
+                        render();
+                        showToast(`완료한 ${completedCount}개 항목을 정리했습니다.`);
+                    }
+                );
+            });
+
+            // '미완료 항목 내일로 이월(체크 초기화)' 버튼
+            document.getElementById('btn-carry-over').addEventListener('click', () => {
+                if (tasks.length === 0) {
+                    showToast('초기화할 항목이 없습니다.');
+                    return;
+                }
+                showConfirm(
+                    '내일 루틴으로 이월',
+                    '모든 항목의 체크 표시를 초기화하여 내일 새롭게 시작할 수 있도록 준비할까요?',
+                    () => {
+                        tasks.forEach(t => t.checked = false);
+                        saveTasks();
+                        render();
+                        showToast('모든 항목이 내일 일정으로 이월(초기화)되었습니다.');
+                    }
+                );
+            });
+
+            // '기본 예시 복원' 버튼
+            document.getElementById('btn-reset-sample').addEventListener('click', () => {
+                showConfirm(
+                    '기본 예시 복원',
+                    '현재 목록을 초기 예시 체크리스트로 되돌릴까요?',
+                    () => {
+                        tasks = DEFAULT_TASKS.map(item => ({ ...item, id: 'task-' + Math.random().toString(36).slice(2, 9) }));
+                        saveTasks();
+                        render();
+                        showToast('기본 예시 목록이 복원되었습니다.');
+                    }
+                );
+            });
+        }
+
+        // 앱 시작
+        window.addEventListener('DOMContentLoaded', () => {
+            initDates();
+            initTheme();
+            initEventListeners();
+            render();
+            initFirebaseCloud();
+        });
+    </script>
+</body>
+</html>
